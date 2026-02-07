@@ -1,86 +1,246 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FM Tuner Pro</title>
-    <meta name="description" content="Professional FM Radio Tuner">
+    <title>MILCODEC Receiver</title>
     <link rel="stylesheet" href="style.css">
-    <!-- TweetNaCl for ChaCha20-Poly1305 -->
     <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tweetnacl-util@0.15.1/nacl-util.min.js"></script>
 </head>
+
 <body>
-    <div class="radio-container">
-        <!-- Radio Case -->
-        <div class="radio-case">
-            <!-- Display Panel -->
-            <div class="display-panel">
-                <div class="freq-display">
-                    <span id="freq-value">101.5</span>
-                    <span class="freq-unit">MHz</span>
-                </div>
-                <div class="indicators">
-                    <span id="stereo-indicator" class="indicator">● STEREO</span>
-                    <span id="signal-indicator" class="indicator signal-off">● SIGNAL</span>
-                </div>
-            </div>
+    <div class="receiver-container">
+        <div class="header">
+            <span class="title">⬡ MILCODEC RECEIVER</span>
+            <span class="version">v3.0 Web</span>
+        </div>
 
-            <!-- Spectrum Visualizer -->
-            <div class="visualizer-container">
-                <canvas id="spectrum" width="340" height="60"></canvas>
-            </div>
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <span id="status-indicator" class="status-off">● OFFLINE</span>
+            <span id="signal-strength">Signal: --</span>
+        </div>
 
-            <!-- Tuning Dial -->
-            <div class="tuning-section">
-                <input type="range" id="tuner" min="88" max="108" step="0.1" value="101.5">
-                <div class="dial-marks">
-                    <span>88</span><span>92</span><span>96</span><span>100</span><span>104</span><span>108</span>
-                </div>
-            </div>
+        <!-- Main Control -->
+        <div class="control-section">
+            <button id="start-btn" class="btn start-btn">🎤 START LISTENING</button>
+        </div>
 
-            <!-- Controls -->
-            <div class="controls">
-                <button id="power-btn" class="btn power-off">🔌 POWER</button>
-                <button id="scan-btn" class="btn">SCAN</button>
-            </div>
+        <!-- Spectrum Visualizer -->
+        <div class="visualizer-section">
+            <canvas id="spectrum" width="340" height="80"></canvas>
+        </div>
 
-            <!-- Hidden Messages Panel (appears when unlocked) -->
-            <div id="messages-panel" class="messages-panel hidden">
-                <div class="panel-header">
-                    <span class="panel-title">⬡ MILCODEC RECEIVER</span>
-                    <span class="version">v3.0 Web</span>
-                </div>
-                <div id="inbox" class="inbox">
-                    <div class="empty-state">Listening for signals...</div>
-                </div>
-                <div id="reading-pane" class="reading-pane">
-                    <div class="pane-label">READING PANE</div>
-                    <div id="current-message" class="current-message">Select a message to view</div>
-                </div>
-                <div class="rx-status">
-                    <span id="rx-status-text">● READY</span>
-                </div>
+        <!-- Mode Selection -->
+        <div class="mode-section">
+            <label>Mode:</label>
+            <select id="rx-mode">
+                <option value="COVERT">COVERT (DSSS)</option>
+                <option value="BURST">BURST (Fast BPSK)</option>
+            </select>
+        </div>
+
+        <!-- Inbox -->
+        <div class="inbox-section">
+            <div class="section-header">INBOX</div>
+            <div id="inbox" class="inbox">
+                <div class="empty-state">No messages yet. Click START LISTENING.</div>
             </div>
         </div>
 
-        <!-- Secret Trigger Area -->
-        <div id="secret-trigger" class="secret-trigger"></div>
-    </div>
-
-    <!-- Password Modal -->
-    <div id="password-modal" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-title">ACCESS CONTROL</div>
-            <label for="passcode">ENTER PASSCODE:</label>
-            <input type="password" id="passcode" autocomplete="off">
-            <div id="auth-error" class="auth-error hidden">ACCESS DENIED</div>
-            <button id="auth-btn" class="btn auth-btn">AUTHENTICATE</button>
+        <!-- Reading Pane -->
+        <div class="reading-section">
+            <div class="section-header">MESSAGE</div>
+            <div id="current-message" class="current-message">
+                Select a message to view
+            </div>
         </div>
     </div>
 
     <script src="decoder.js"></script>
     <script src="crypto.js"></script>
-    <script src="app.js"></script>
+    <script>
+        class MilcodecReceiver {
+            constructor() {
+                this.isListening = false;
+                this.audioContext = null;
+                this.analyser = null;
+                this.audioBuffer = [];
+                this.messages = [];
+                this.rxMode = 'COVERT';
+
+                this.startBtn = document.getElementById('start-btn');
+                this.statusIndicator = document.getElementById('status-indicator');
+                this.signalStrength = document.getElementById('signal-strength');
+                this.inbox = document.getElementById('inbox');
+                this.currentMessage = document.getElementById('current-message');
+                this.rxModeSelect = document.getElementById('rx-mode');
+                this.canvas = document.getElementById('spectrum');
+                this.ctx = this.canvas.getContext('2d');
+
+                this.startBtn.addEventListener('click', () => this.toggleListening());
+                this.rxModeSelect.addEventListener('change', (e) => this.rxMode = e.target.value);
+
+                this.startVisualization();
+            }
+
+            async toggleListening() {
+                if (this.isListening) {
+                    this.stopListening();
+                } else {
+                    await this.startListening();
+                }
+            }
+
+            async startListening() {
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        sampleRate: 44100
+                    });
+
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            sampleRate: 44100,
+                            channelCount: 1,
+                            echoCancellation: false,
+                            noiseSuppression: false,
+                            autoGainControl: false
+                        }
+                    });
+
+                    this.analyser = this.audioContext.createAnalyser();
+                    this.analyser.fftSize = 256;
+
+                    const microphone = this.audioContext.createMediaStreamSource(stream);
+                    microphone.connect(this.analyser);
+
+                    const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
+                    processor.onaudioprocess = (e) => {
+                        if (!this.isListening) return;
+                        const input = e.inputBuffer.getChannelData(0);
+                        this.audioBuffer.push(new Float32Array(input));
+
+                        if (this.audioBuffer.length * 4096 >= 44100 * 3) {
+                            this.processAudio();
+                        }
+                    };
+
+                    microphone.connect(processor);
+                    processor.connect(this.audioContext.destination);
+
+                    this.isListening = true;
+                    this.startBtn.textContent = '⏹ STOP LISTENING';
+                    this.startBtn.classList.add('listening');
+                    this.statusIndicator.textContent = '● LISTENING';
+                    this.statusIndicator.className = 'status-on';
+
+                } catch (e) {
+                    alert('Microphone access denied: ' + e.message);
+                }
+            }
+
+            stopListening() {
+                this.isListening = false;
+                this.audioBuffer = [];
+                this.startBtn.textContent = '🎤 START LISTENING';
+                this.startBtn.classList.remove('listening');
+                this.statusIndicator.textContent = '● OFFLINE';
+                this.statusIndicator.className = 'status-off';
+            }
+
+            processAudio() {
+                const totalLength = this.audioBuffer.reduce((sum, c) => sum + c.length, 0);
+                const combined = new Float32Array(totalLength);
+                let offset = 0;
+                for (const chunk of this.audioBuffer) {
+                    combined.set(chunk, offset);
+                    offset += chunk.length;
+                }
+                this.audioBuffer = [];
+
+                this.statusIndicator.textContent = '● DECODING...';
+
+                const payload = MILCODEC.extractFromAudio(combined, this.rxMode, true);
+
+                if (payload) {
+                    const result = MilcodecCrypto.decrypt(payload);
+                    if (result.status === 'OK') {
+                        this.addMessage(result);
+                    }
+                }
+
+                this.statusIndicator.textContent = '● LISTENING';
+            }
+
+            addMessage(result) {
+                const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const message = {
+                    content: result.content,
+                    priority: result.priority,
+                    timestamp
+                };
+                this.messages.unshift(message);
+
+                const emptyState = this.inbox.querySelector('.empty-state');
+                if (emptyState) emptyState.remove();
+
+                const item = document.createElement('div');
+                item.className = `message-item ${result.priority.toLowerCase()}`;
+                item.textContent = `[${result.priority}] ${timestamp} - ${result.content.substring(0, 40)}...`;
+                item.onclick = () => this.showMessage(message);
+                this.inbox.insertBefore(item, this.inbox.firstChild);
+
+                this.showMessage(message);
+
+                if (result.priority === 'FLASH' || result.priority === 'IMMEDIATE') {
+                    this.playBeep();
+                }
+            }
+
+            showMessage(msg) {
+                this.currentMessage.textContent = msg.content;
+                this.currentMessage.style.color = MILCODEC.PRIORITIES[msg.priority] || '#e8e8f0';
+            }
+
+            playBeep() {
+                const osc = this.audioContext.createOscillator();
+                const gain = this.audioContext.createGain();
+                osc.connect(gain);
+                gain.connect(this.audioContext.destination);
+                osc.frequency.value = 880;
+                gain.gain.value = 0.1;
+                osc.start();
+                setTimeout(() => osc.stop(), 200);
+            }
+
+            startVisualization() {
+                const draw = () => {
+                    requestAnimationFrame(draw);
+                    const w = this.canvas.width, h = this.canvas.height;
+                    this.ctx.fillStyle = '#0d0d14';
+                    this.ctx.fillRect(0, 0, w, h);
+
+                    if (this.analyser && this.isListening) {
+                        const data = new Uint8Array(this.analyser.frequencyBinCount);
+                        this.analyser.getByteFrequencyData(data);
+                        const barW = w / data.length * 2;
+                        let x = 0;
+                        for (let i = 0; i < data.length; i++) {
+                            const barH = (data[i] / 255) * h;
+                            this.ctx.fillStyle = `hsl(${120 - (data[i] / 255) * 120}, 80%, 50%)`;
+                            this.ctx.fillRect(x, h - barH, barW - 1, barH);
+                            x += barW;
+                        }
+                    }
+                };
+                draw();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => new MilcodecReceiver());
+    </script>
 </body>
+
 </html>
