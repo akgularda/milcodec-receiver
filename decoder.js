@@ -1,6 +1,7 @@
 /**
- * MILCODEC Web Decoder — Robust Air-Gap
+ * MILCODEC Web Decoder — Robust Air-Gap (Heavy Duty)
  * Carrier: 14500 Hz
+ * SAMPLES_PER_CHIP: 20 (Slow rate for echo resilience)
  * Protocol: SYNC(32) + LEN(16) + PAYLOAD(N*8) + PAYLOAD(N*8) + PAYLOAD(N*8)
  */
 
@@ -10,12 +11,11 @@ const MILCODEC = {
 
     // Barker-31 PN code
     BARKER_31: [1, 1, 1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1, 1, 1, 1, 1, -1, -1, 1, 1, -1, 1, -1, 1, -1, -1, -1, -1, -1],
-    SAMPLES_PER_CHIP: 6, // Matches Python sender
+    SAMPLES_PER_CHIP: 20, // Match Heavy Duty Sender
 
     // 32-bit sync word
     SYNC_WORD: [0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1],
 
-    // Bandpass filter around carrier
     bandpassFilter(data, centerFreq, bandwidth) {
         const fs = this.FS;
         const w0 = 2 * Math.PI * centerFreq / fs;
@@ -42,6 +42,7 @@ const MILCODEC = {
     },
 
     getSpreadTemplate() {
+        // Build template dynamically based on SAMPLES_PER_CHIP
         const template = new Float32Array(this.BARKER_31.length * this.SAMPLES_PER_CHIP);
         for (let c = 0; c < this.BARKER_31.length; c++) {
             for (let s = 0; s < this.SAMPLES_PER_CHIP; s++) {
@@ -52,10 +53,10 @@ const MILCODEC = {
     },
 
     extractFromAudio(audioData) {
-        const samplesPerBit = this.BARKER_31.length * this.SAMPLES_PER_CHIP;
+        const samplesPerBit = this.BARKER_31.length * this.SAMPLES_PER_CHIP; // 31 * 20 = 620
         const spreadTemplate = this.getSpreadTemplate();
 
-        console.log(`[DECODER] Processing ${audioData.length} samples...`);
+        console.log(`[DECODER] Processing ${audioData.length} samples (Heavy Duty)...`);
 
         // 1. Bandpass 14.5kHz ±1kHz
         const filtered = this.bandpassFilter(audioData, this.CARRIER_FREQ, 2000);
@@ -68,6 +69,7 @@ const MILCODEC = {
 
         // 3. Despread
         const numBits = Math.floor(baseband.length / samplesPerBit);
+        console.log(`[DECODER] Bits capacity: ${numBits}`);
         const bits = new Uint8Array(numBits);
 
         for (let i = 0; i < numBits; i++) {
@@ -79,20 +81,20 @@ const MILCODEC = {
             bits[i] = score > 0 ? 1 : 0;
         }
 
-        // 4. Find Sync
+        // 4. Find Sync (lenient search: allow 1 bit error)
         const sw = this.SYNC_WORD;
         let syncIndex = -1, inverted = false;
 
-        // Optimized search
         for (let i = 0; i < Math.min(bits.length - 32, 5000); i++) {
-            let match = true, invMatch = true;
+            let matchErrors = 0, invErrors = 0;
             for (let j = 0; j < 32; j++) {
-                if (bits[i + j] !== sw[j]) match = false;
-                if (bits[i + j] !== (1 - sw[j])) invMatch = false;
-                if (!match && !invMatch) break;
+                if (bits[i + j] !== sw[j]) matchErrors++;
+                if (bits[i + j] !== (1 - sw[j])) invErrors++;
             }
-            if (match) { syncIndex = i; inverted = false; break; }
-            if (invMatch) { syncIndex = i; inverted = true; break; }
+
+            // Allow up to 2 bit errors in sync word
+            if (matchErrors <= 2) { syncIndex = i; inverted = false; break; }
+            if (invErrors <= 2) { syncIndex = i; inverted = true; break; }
         }
 
         if (syncIndex === -1) {
@@ -115,7 +117,7 @@ const MILCODEC = {
         console.log(`[DECODER] Payload Length: ${len} bytes`);
         if (len <= 0 || len > 1024) return null;
 
-        const totalBitsNeeded = 16 + (len * 8 * 3); // Length + 3 copies of payload
+        const totalBitsNeeded = 16 + (len * 8 * 3);
         if (bits.length < syncIndex + 32 + totalBitsNeeded) {
             console.log('[DECODER] Incomplete packet.');
             return null;
@@ -123,16 +125,13 @@ const MILCODEC = {
 
         // 6. Majority Vote (Triple Redundancy)
         const payloadBits = new Uint8Array(len * 8);
-        const dataStart = 16; // Skip length bits
+        const dataStart = 16;
         const bitLen = len * 8;
 
         for (let i = 0; i < bitLen; i++) {
-            // Get the 3 copies
             const b1 = rawData[dataStart + i];
             const b2 = rawData[dataStart + bitLen + i];
             const b3 = rawData[dataStart + (bitLen * 2) + i];
-
-            // Vote
             const sum = b1 + b2 + b3;
             payloadBits[i] = sum >= 2 ? 1 : 0;
         }
