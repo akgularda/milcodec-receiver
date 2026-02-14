@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>MILCODEC Robust File Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+    <script src="crypto.js"></script>
+    <script src="decoder.js"></script>
+    <style>
+        body {
+            background: #0d0d14;
+            color: #e8e8f0;
+            font-family: monospace;
+            padding: 20px;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 16px;
+            background: #00ff88;
+            border: none;
+            cursor: pointer;
+            color: black;
+            font-weight: bold;
+            border-radius: 5px;
+        }
+
+        input[type="file"] {
+            margin-bottom: 20px;
+        }
+
+        #output {
+            background: #14141f;
+            padding: 20px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            border-radius: 5px;
+            border: 1px solid #333;
+        }
+
+        .success {
+            color: #00ff88;
+        }
+
+        .error {
+            color: #ff3355;
+        }
+
+        .info {
+            color: #00d4ff;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>MILCODEC Robust Decoder Test</h1>
+    <p>Select a WAV file to decode (try <code>broadcast_robust.wav</code>):</p>
+    <input type="file" id="wavFile" accept=".wav">
+    <button onclick="decodeFile()">DECODE WAV</button>
+    <div id="output">Waiting for file...</div>
+
+    <script>
+        async function decodeFile() {
+            const file = document.getElementById('wavFile').files[0];
+            const output = document.getElementById('output');
+
+            if (!file) {
+                output.textContent = 'Please select a WAV file first';
+                return;
+            }
+
+            output.innerHTML = '<span class="info">Loading file...</span>\n';
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const audioContext = new AudioContext({ sampleRate: 44100 });
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                const channelData = audioBuffer.getChannelData(0);
+                output.innerHTML += `Loaded: ${channelData.length} samples (${(channelData.length / 44100).toFixed(2)}s)\n`;
+                output.innerHTML += `Sample rate: ${audioBuffer.sampleRate} Hz\n\n`;
+
+                output.innerHTML += '<span class="info">Extracting signal (14.5kHz Robust)...</span>\n';
+
+                const originalLog = console.log;
+                console.log = (msg) => {
+                    output.innerHTML += `<span style="opacity:0.7">> ${msg}</span>\n`;
+                    originalLog(msg);
+                };
+
+                const startTime = performance.now();
+                // New decoder signature (no args)
+                const payload = MILCODEC.extractFromAudio(channelData);
+                const endTime = performance.now();
+
+                console.log = originalLog;
+
+                output.innerHTML += `Processing time: ${(endTime - startTime).toFixed(0)}ms\n`;
+
+                if (payload) {
+                    output.innerHTML += `\n<span class="success">✓ SIGNAL FOUND!</span>\n`;
+                    output.innerHTML += `Payload: ${payload.length} bytes\n`;
+
+                    output.innerHTML += 'Decrypting...\n';
+                    const result = MilcodecCrypto.decrypt(payload);
+
+                    if (result.status === 'OK') {
+                        output.innerHTML += `<span class="success">Status: ${result.status}</span>\n`;
+                        output.innerHTML += `<b style="font-size:1.2em">Message: ${result.content}</b>\n`;
+                        output.innerHTML += `Priority: ${result.priority}\n`;
+                    } else {
+                        output.innerHTML += `<span class="error">Decryption Failed: ${result.content}</span>\n`;
+                    }
+                } else {
+                    output.innerHTML += '\n<span class="error">✗ NO SIGNAL FOUND</span>\n';
+                }
+
+            } catch (e) {
+                output.innerHTML += '\n<span class="error">Error: ' + e.message + '</span>\n' + e.stack;
+            }
+        }
+    </script>
+</body>
+
+</html>

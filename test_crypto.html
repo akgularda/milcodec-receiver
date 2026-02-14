@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Crypto Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+</head>
+
+<body>
+    <h1>MILCODEC Crypto Test</h1>
+    <pre id="output">Testing...</pre>
+    <script>
+        // Same key as Python
+        const key = new Uint8Array([
+            48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49, 50, 51, 52, 53,
+            54, 55, 56, 57, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49
+        ]);
+
+        // Test: encrypt in JS, decrypt in JS
+        const testMessage = "HELLO";
+        const payload = new TextEncoder().encode(JSON.stringify({ p: 'ROUTINE', m: testMessage }));
+
+        // Create packet
+        const packet = new Uint8Array(1 + 64 + payload.length);
+        packet[0] = 0x01;
+        packet.set(payload, 65);
+
+        // Generate nonce
+        const nonce = nacl.randomBytes(24);
+
+        // Encrypt
+        const ciphertext = nacl.secretbox(packet, nonce, key);
+
+        // Combine nonce + ciphertext (like Python does)
+        const encrypted = new Uint8Array(24 + ciphertext.length);
+        encrypted.set(nonce);
+        encrypted.set(ciphertext, 24);
+
+        // Now decrypt
+        const decNonce = encrypted.slice(0, 24);
+        const decCipher = encrypted.slice(24);
+        const decrypted = nacl.secretbox.open(decCipher, decNonce, key);
+
+        let result = "";
+        if (decrypted) {
+            const jsonBytes = decrypted.slice(65);
+            const jsonStr = new TextDecoder().decode(jsonBytes);
+            const data = JSON.parse(jsonStr);
+            result = "SUCCESS! Decrypted message: " + data.m;
+        } else {
+            result = "FAILED to decrypt";
+        }
+
+        document.getElementById('output').textContent = result;
+        console.log(result);
+    </script>
+</body>
+
+</html>

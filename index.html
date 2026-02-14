@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MILCODEC Receiver</title>
+    <title>MILCODEC Receiver v4 (Robust)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tweetnacl-util@0.15.1/nacl-util.min.js"></script>
@@ -14,47 +14,33 @@
     <div class="receiver-container">
         <div class="header">
             <span class="title">⬡ MILCODEC RECEIVER</span>
-            <span class="version">v3.0 Web</span>
+            <span class="version">v4.0 Robust</span>
         </div>
 
-        <!-- Status Bar -->
         <div class="status-bar">
             <span id="status-indicator" class="status-off">● OFFLINE</span>
             <span id="signal-strength">Signal: --</span>
         </div>
 
-        <!-- Main Control -->
         <div class="control-section">
             <button id="start-btn" class="btn start-btn">🎤 START LISTENING</button>
         </div>
 
-        <!-- Spectrum Visualizer -->
         <div class="visualizer-section">
             <canvas id="spectrum" width="340" height="80"></canvas>
         </div>
 
-        <!-- Mode Selection -->
-        <div class="mode-section">
-            <label>Mode:</label>
-            <select id="rx-mode">
-                <option value="COVERT">COVERT (DSSS)</option>
-                <option value="BURST">BURST (Fast BPSK)</option>
-            </select>
-        </div>
-
-        <!-- Inbox -->
         <div class="inbox-section">
             <div class="section-header">INBOX</div>
             <div id="inbox" class="inbox">
-                <div class="empty-state">No messages yet. Click START LISTENING.</div>
+                <div class="empty-state">Waiting for transmission...</div>
             </div>
         </div>
 
-        <!-- Reading Pane -->
         <div class="reading-section">
-            <div class="section-header">MESSAGE</div>
-            <div id="current-message" class="current-message">
-                Select a message to view
+            <div class="section-header">DEBUG LOG</div>
+            <div id="debug-log"
+                style="font-family:monospace; font-size:10px; color:#666; padding:10px; height:100px; overflow-y:auto;">
             </div>
         </div>
     </div>
@@ -69,21 +55,31 @@
                 this.analyser = null;
                 this.audioBuffer = [];
                 this.messages = [];
-                this.rxMode = 'COVERT';
 
                 this.startBtn = document.getElementById('start-btn');
                 this.statusIndicator = document.getElementById('status-indicator');
-                this.signalStrength = document.getElementById('signal-strength');
                 this.inbox = document.getElementById('inbox');
-                this.currentMessage = document.getElementById('current-message');
-                this.rxModeSelect = document.getElementById('rx-mode');
                 this.canvas = document.getElementById('spectrum');
                 this.ctx = this.canvas.getContext('2d');
+                this.debugLog = document.getElementById('debug-log');
 
                 this.startBtn.addEventListener('click', () => this.toggleListening());
-                this.rxModeSelect.addEventListener('change', (e) => this.rxMode = e.target.value);
+
+                // Override console.log
+                const originalLog = console.log;
+                console.log = (msg) => {
+                    this.log(msg);
+                    originalLog(msg);
+                };
 
                 this.startVisualization();
+            }
+
+            log(msg) {
+                const line = document.createElement('div');
+                line.textContent = `> ${msg}`;
+                this.debugLog.prepend(line);
+                if (this.debugLog.children.length > 20) this.debugLog.lastChild.remove();
             }
 
             async toggleListening() {
@@ -99,6 +95,11 @@
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
                         sampleRate: 44100
                     });
+
+                    // Resume context (mobile requirement)
+                    if (this.audioContext.state === 'suspended') {
+                        await this.audioContext.resume();
+                    }
 
                     const stream = await navigator.mediaDevices.getUserMedia({
                         audio: {
@@ -116,13 +117,15 @@
                     const microphone = this.audioContext.createMediaStreamSource(stream);
                     microphone.connect(this.analyser);
 
-                    const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
+                    // 16384 buffer size = ~0.37s. Process chunks.
+                    const processor = this.audioContext.createScriptProcessor(16384, 1, 1);
                     processor.onaudioprocess = (e) => {
                         if (!this.isListening) return;
                         const input = e.inputBuffer.getChannelData(0);
                         this.audioBuffer.push(new Float32Array(input));
 
-                        if (this.audioBuffer.length * 4096 >= 44100 * 3) {
+                        // Process every ~3 seconds
+                        if (this.audioBuffer.length * 16384 >= 44100 * 3) {
                             this.processAudio();
                         }
                     };
@@ -133,11 +136,11 @@
                     this.isListening = true;
                     this.startBtn.textContent = '⏹ STOP LISTENING';
                     this.startBtn.classList.add('listening');
-                    this.statusIndicator.textContent = '● LISTENING';
+                    this.statusIndicator.textContent = '● LISTENING (14.5kHz)';
                     this.statusIndicator.className = 'status-on';
 
                 } catch (e) {
-                    alert('Microphone access denied: ' + e.message);
+                    alert('Mic Error: ' + e.message);
                 }
             }
 
@@ -148,6 +151,7 @@
                 this.startBtn.classList.remove('listening');
                 this.statusIndicator.textContent = '● OFFLINE';
                 this.statusIndicator.className = 'status-off';
+                if (this.audioContext) this.audioContext.close();
             }
 
             processAudio() {
@@ -162,49 +166,41 @@
 
                 this.statusIndicator.textContent = '● DECODING...';
 
-                const payload = MILCODEC.extractFromAudio(combined, this.rxMode, true);
+                // Add tiny delay to let UI update
+                setTimeout(() => {
+                    const payload = MILCODEC.extractFromAudio(combined);
 
-                if (payload) {
-                    const result = MilcodecCrypto.decrypt(payload);
-                    if (result.status === 'OK') {
-                        this.addMessage(result);
+                    if (payload) {
+                        const result = MilcodecCrypto.decrypt(payload);
+                        if (result.status === 'OK') {
+                            this.addMessage(result);
+                        } else {
+                            this.log(`Decrypt failed: ${result.content}`);
+                        }
                     }
-                }
-
-                this.statusIndicator.textContent = '● LISTENING';
+                    this.statusIndicator.textContent = '● LISTENING (14.5kHz)';
+                }, 10);
             }
 
             addMessage(result) {
                 const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const message = {
-                    content: result.content,
-                    priority: result.priority,
-                    timestamp
-                };
-                this.messages.unshift(message);
 
                 const emptyState = this.inbox.querySelector('.empty-state');
                 if (emptyState) emptyState.remove();
 
                 const item = document.createElement('div');
                 item.className = `message-item ${result.priority.toLowerCase()}`;
-                item.textContent = `[${result.priority}] ${timestamp} - ${result.content.substring(0, 40)}...`;
-                item.onclick = () => this.showMessage(message);
+
+                item.innerHTML = `
+                    <div style="font-weight:bold; color:#fff">${result.content}</div>
+                    <div style="font-size:0.8em; opacity:0.7">
+                        ${timestamp} • ${result.priority} • VALID
+                    </div>
+                `;
+
                 this.inbox.insertBefore(item, this.inbox.firstChild);
 
-                this.showMessage(message);
-
-                if (result.priority === 'FLASH' || result.priority === 'IMMEDIATE') {
-                    this.playBeep();
-                }
-            }
-
-            showMessage(msg) {
-                this.currentMessage.textContent = msg.content;
-                this.currentMessage.style.color = MILCODEC.PRIORITIES[msg.priority] || '#e8e8f0';
-            }
-
-            playBeep() {
+                // Beep
                 const osc = this.audioContext.createOscillator();
                 const gain = this.audioContext.createGain();
                 osc.connect(gain);
