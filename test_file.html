@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>MILCODEC "The Screecher" Test</title>
+    <title>MILCODEC "The Dolphin" CSS Test</title>
     <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
     <script src="crypto.js"></script>
     <script src="decoder.js"></script>
@@ -53,8 +53,8 @@
 </head>
 
 <body>
-    <h1>MILCODEC "The Screecher" Decoder Test</h1>
-    <p>Select a WAV file to decode (try <code>broadcast_modem.wav</code>):</p>
+    <h1>MILCODEC "The Dolphin" CSS Decoder Test</h1>
+    <p>Select a WAV file to decode (try <code>broadcast_dolphin.wav</code>):</p>
     <input type="file" id="wavFile" accept=".wav">
     <button onclick="decodeFile()">DECODE WAV</button>
     <div id="output">Waiting for file...</div>
@@ -80,7 +80,7 @@
                 output.innerHTML += `Loaded: ${channelData.length} samples (${(channelData.length / 44100).toFixed(2)}s)\n`;
                 output.innerHTML += `Sample rate: ${audioBuffer.sampleRate} Hz\n\n`;
 
-                output.innerHTML += '<span class="info">Extracting signal (14.0/14.2kHz FSK)...</span>\n';
+                output.innerHTML += '<span class="info">Extracting signal (14-17kHz CSS)...</span>\n';
 
                 const originalLog = console.log;
                 console.log = (msg) => {
@@ -112,7 +112,7 @@
                     }
                 } else {
                     output.innerHTML += '\n<span class="error">✗ NO SIGNAL FOUND</span>\n';
-                    output.innerHTML += 'Check: Is the volume loud enough? This FSK version is robust but needs signal.\n';
+                    output.innerHTML += 'Check: Valid CSS signal? Volume must be audible.\n';
                 }
 
             } catch (e) {
