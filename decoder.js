@@ -1,142 +1,166 @@
 /**
- * MILCODEC Web Decoder — Robust Air-Gap (Heavy Duty)
- * Carrier: 14500 Hz
- * SAMPLES_PER_CHIP: 20 (Slow rate for echo resilience)
- * Protocol: SYNC(32) + LEN(16) + PAYLOAD(N*8) + PAYLOAD(N*8) + PAYLOAD(N*8)
+ * MILCODEC Web Decoder — "The Screecher" (2-FSK)
+ * Mark (1): 14000 Hz
+ * Space (0): 14200 Hz
+ * Symbol Rate: 20 baud (50ms)
+ * Protocol: PREAMBLE + SYNC(16) + LEN(16) + PAYLOAD(N*8 * 3)
  */
 
 const MILCODEC = {
     FS: 44100,
-    CARRIER_FREQ: 14500,
+    FREQ_1: 14000,
+    FREQ_0: 14200,
+    BIT_DURATION: 0.050, // 50ms
 
-    // Barker-31 PN code
-    BARKER_31: [1, 1, 1, 1, 1, -1, -1, 1, 1, -1, 1, -1, -1, 1, 1, 1, 1, 1, -1, -1, 1, 1, -1, 1, -1, 1, -1, -1, -1, -1, -1],
-    SAMPLES_PER_CHIP: 20, // Match Heavy Duty Sender
+    // SYNC WORD: 1010 1010 1100 1100
+    SYNC_BITS: [1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0],
 
-    // 32-bit sync word
-    SYNC_WORD: [0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1],
+    // Goertzel Algorithm for single-frequency energy measurement
+    // Optimized for detecting specific tones without full FFT overhead
+    goertzel(samples, targetFreq, sampleRate) {
+        const k = Math.round(0.5 + (samples.length * targetFreq) / sampleRate);
+        const w = (2 * Math.PI * k) / samples.length;
+        const cosine = Math.cos(w);
+        const sine = Math.sin(w);
+        const coeff = 2 * cosine;
 
-    bandpassFilter(data, centerFreq, bandwidth) {
-        const fs = this.FS;
-        const w0 = 2 * Math.PI * centerFreq / fs;
-        const Q = centerFreq / bandwidth;
-        const alpha = Math.sin(w0) / (2 * Q);
+        let q1 = 0;
+        let q2 = 0;
 
-        const b0 = alpha;
-        const b1 = 0;
-        const b2 = -alpha;
-        const a0 = 1 + alpha;
-        const a1 = -2 * Math.cos(w0);
-        const a2 = 1 - alpha;
-
-        const out = new Float32Array(data.length);
-        let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-
-        for (let i = 0; i < data.length; i++) {
-            const x0 = data[i];
-            out[i] = (b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0;
-            x2 = x1; x1 = x0;
-            y2 = y1; y1 = out[i];
+        for (let i = 0; i < samples.length; i++) {
+            const q0 = coeff * q1 - q2 + samples[i];
+            q2 = q1;
+            q1 = q0;
         }
-        return out;
-    },
 
-    getSpreadTemplate() {
-        // Build template dynamically based on SAMPLES_PER_CHIP
-        const template = new Float32Array(this.BARKER_31.length * this.SAMPLES_PER_CHIP);
-        for (let c = 0; c < this.BARKER_31.length; c++) {
-            for (let s = 0; s < this.SAMPLES_PER_CHIP; s++) {
-                template[c * this.SAMPLES_PER_CHIP + s] = this.BARKER_31[c];
-            }
-        }
-        return template;
+        const real = (q1 - q2 * cosine);
+        const imag = (q2 * sine);
+        return real * real + imag * imag; // Magnitude squared
     },
 
     extractFromAudio(audioData) {
-        const samplesPerBit = this.BARKER_31.length * this.SAMPLES_PER_CHIP; // 31 * 20 = 620
-        const spreadTemplate = this.getSpreadTemplate();
+        console.log(`[DECODER] Analyzing ${audioData.length} samples (Screecher 2-FSK)...`);
 
-        console.log(`[DECODER] Processing ${audioData.length} samples (Heavy Duty)...`);
+        // 1. Sliding Window Power Analysis
+        // We scan the buffer in steps of ~25ms (half-bit) to find bit boundaries
+        const stepSize = Math.floor(this.FS * this.BIT_DURATION / 2); // 25ms
+        const windowSize = Math.floor(this.FS * this.BIT_DURATION); // 50ms
 
-        // 1. Bandpass 14.5kHz ±1kHz
-        const filtered = this.bandpassFilter(audioData, this.CARRIER_FREQ, 2000);
+        const detectedBits = [];
+        const bitEnergies = [];
 
-        // 2. Demodulate
-        const baseband = new Float32Array(filtered.length);
-        for (let i = 0; i < filtered.length; i++) {
-            baseband[i] = filtered[i] * Math.cos(2 * Math.PI * this.CARRIER_FREQ * i / this.FS);
+        for (let i = 0; i < audioData.length - windowSize; i += stepSize) {
+            const window = audioData.slice(i, i + windowSize);
+
+            const p1 = this.goertzel(window, this.FREQ_1, this.FS);
+            const p0 = this.goertzel(window, this.FREQ_0, this.FS);
+
+            // Normalize relative to local energy
+            const total = p1 + p0 + 1e-9;
+            const r1 = p1 / total;
+            const r0 = p0 / total;
+
+            // Simple decision
+            if (r1 > 0.6) {
+                detectedBits.push(1);
+                bitEnergies.push(p1);
+            } else if (r0 > 0.6) {
+                detectedBits.push(0);
+                bitEnergies.push(p0);
+            } else {
+                detectedBits.push(-1); // Indeterminate
+                bitEnergies.push(0);
+            }
         }
 
-        // 3. Despread
-        const numBits = Math.floor(baseband.length / samplesPerBit);
-        console.log(`[DECODER] Bits capacity: ${numBits}`);
-        const bits = new Uint8Array(numBits);
+        // Logic: Detected bits are sampled at 2x rate. 
+        // We need to synchronize and decimate.
+        // Let's just look for the SYNC pattern in the raw oversampled stream.
 
-        for (let i = 0; i < numBits; i++) {
-            let score = 0;
-            const start = i * samplesPerBit;
-            for (let j = 0; j < samplesPerBit; j++) {
-                score += baseband[start + j] * spreadTemplate[j];
-            }
-            bits[i] = score > 0 ? 1 : 0;
+        // Oversampled SYNC pattern (approximate)
+        // SYNC: 1 0 1 0... -> 1 1 0 0 1 1 0 0... (since 2 samples/bit)
+
+        const rawStream = detectedBits; // -1, 0, 1
+
+        // Search for Sync Pattern
+        // 1010 1010 1100 1100
+        // In 2x oversampled: 11 00 11 00 11 00 11 00 11 11 00 00 11 11 00 00
+
+        const targetSyncPattern = [];
+        for (let b of this.SYNC_BITS) {
+            targetSyncPattern.push(b);
+            targetSyncPattern.push(b); // 2x oversampling
         }
 
-        // 4. Find Sync (lenient search: allow 1 bit error)
-        const sw = this.SYNC_WORD;
-        let syncIndex = -1, inverted = false;
-
-        for (let i = 0; i < Math.min(bits.length - 32, 5000); i++) {
-            let matchErrors = 0, invErrors = 0;
-            for (let j = 0; j < 32; j++) {
-                if (bits[i + j] !== sw[j]) matchErrors++;
-                if (bits[i + j] !== (1 - sw[j])) invErrors++;
+        let syncIndex = -1;
+        // Search
+        for (let i = 0; i < rawStream.length - targetSyncPattern.length; i++) {
+            let errors = 0;
+            for (let j = 0; j < targetSyncPattern.length; j++) {
+                if (rawStream[i + j] !== targetSyncPattern[j]) errors++;
             }
-
-            // Allow up to 2 bit errors in sync word
-            if (matchErrors <= 2) { syncIndex = i; inverted = false; break; }
-            if (invErrors <= 2) { syncIndex = i; inverted = true; break; }
+            if (errors <= 4) { // Allow some errors
+                syncIndex = i;
+                break;
+            }
         }
 
         if (syncIndex === -1) {
-            console.log('[DECODER] No sync found.');
+            console.log('[DECODER] No FSK Sync found');
             return null;
         }
 
-        console.log(`[DECODER] Sync at ${syncIndex}, inverted=${inverted}`);
+        console.log(`[DECODER] FSK Sync found at index ${syncIndex}`);
 
-        let rawData = bits.slice(syncIndex + 32);
-        if (inverted) {
-            for (let i = 0; i < rawData.length; i++) rawData[i] = 1 - rawData[i];
+        // Downsample from here (take every 2nd sample)
+        const dataStream = [];
+        // Skip sync
+        let cursor = syncIndex + targetSyncPattern.length;
+
+        // Phase adjustment: try to sample in middle of bit
+        cursor += 1;
+
+        while (cursor < rawStream.length) {
+            dataStream.push(rawStream[cursor]);
+            cursor += 2; // Step by 2 (50ms)
         }
 
-        // 5. Read Length (16 bits)
-        if (rawData.length < 16) return null;
+        // 2. Read Length (16 bits)
+        if (dataStream.length < 16) return null;
         let len = 0;
-        for (let i = 0; i < 16; i++) len = (len << 1) | rawData[i];
+        for (let i = 0; i < 16; i++) {
+            const bit = dataStream[i] === 1 ? 1 : 0; // treat -1 as 0
+            len = (len << 1) | bit;
+        }
 
         console.log(`[DECODER] Payload Length: ${len} bytes`);
         if (len <= 0 || len > 1024) return null;
 
-        const totalBitsNeeded = 16 + (len * 8 * 3);
-        if (bits.length < syncIndex + 32 + totalBitsNeeded) {
-            console.log('[DECODER] Incomplete packet.');
-            return null;
-        }
-
-        // 6. Majority Vote (Triple Redundancy)
+        // 3. Majority Vote
         const payloadBits = new Uint8Array(len * 8);
         const dataStart = 16;
         const bitLen = len * 8;
 
+        if (dataStream.length < dataStart + (bitLen * 3)) {
+            console.log('[DECODER] Incomplete FSK packet');
+            return null;
+        }
+
         for (let i = 0; i < bitLen; i++) {
-            const b1 = rawData[dataStart + i];
-            const b2 = rawData[dataStart + bitLen + i];
-            const b3 = rawData[dataStart + (bitLen * 2) + i];
+            let b1 = dataStream[dataStart + i];
+            let b2 = dataStream[dataStart + bitLen + i];
+            let b3 = dataStream[dataStart + (bitLen * 2) + i];
+
+            // Clean up -1s
+            if (b1 < 0) b1 = 0;
+            if (b2 < 0) b2 = 0;
+            if (b3 < 0) b3 = 0;
+
             const sum = b1 + b2 + b3;
             payloadBits[i] = sum >= 2 ? 1 : 0;
         }
 
-        // 7. Reconstruct Bytes
+        // 4. Reconstruct Bytes
         const bytes = new Uint8Array(len);
         for (let i = 0; i < len; i++) {
             let b = 0;
