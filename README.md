@@ -122,7 +122,10 @@ The preview is maintained as a repository asset; the live interface or generated
 
 ## Data and methodology
 
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the implementation files in this repository. Source dates, transformation steps, and known gaps must travel with analytical outputs.
+- [decoder.js](decoder.js)
+- [crypto.js](crypto.js)
+
+These repository-specific sources define the methodology or provenance boundary. Source dates, transformation steps, and known gaps must travel with analytical outputs.
 
 ## Update frequency
 
@@ -134,21 +137,13 @@ Release-driven; the receiver has no background data feed.
 python -m http.server 8080
 ```
 
-```shell
-node --test tests/repository-hygiene.test.mjs
-```
-
 Run only in a trusted development environment and review repository-specific prerequisites before using networked or hardware features.
 
 ## Architecture
 
-- `app.js` — repository entry point or configuration.
-- `crypto.js` — repository entry point or configuration.
-- `decoder.js` — repository entry point or configuration.
-- `index.html` — repository entry point or configuration.
-- `README.md` — repository entry point or configuration.
-- `style.css` — repository entry point or configuration.
-- `test_crypto.html` — repository entry point or configuration.
+- `decoder.js` — repository-specific implementation, data, or configuration boundary.
+- `crypto.js` — repository-specific implementation, data, or configuration boundary.
+- `app.js` — repository-specific implementation, data, or configuration boundary.
 
 ## Tests
 
