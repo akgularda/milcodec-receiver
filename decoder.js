@@ -12,6 +12,7 @@ const MILCODEC = {
     F_END: 17000,
     BIT_DURATION: 0.050, // 50ms
     SAMPLES_PER_BIT: 2205, // 44100 * 0.05
+    MAX_AUDIO_SAMPLES: 1323000, // 30 seconds at 44.1 kHz
 
     // Sync Word: 1010 1010 1100 1100
     SYNC_BITS: [1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0],
@@ -50,6 +51,15 @@ const MILCODEC = {
     },
 
     extractFromAudio(audioData) {
+        if (!(audioData instanceof Float32Array)) {
+            console.warn('[DECODER] Rejected non-Float32Array input.');
+            return null;
+        }
+        if (audioData.length === 0 || audioData.length > this.MAX_AUDIO_SAMPLES) {
+            console.warn('[DECODER] Rejected empty or excessive audio input.');
+            return null;
+        }
+
         if (!this.upChirp) this.generateTemplates();
 
         console.log(`[DECODER] Processing ${audioData.length} samples (Dolphin CSS)...`);
@@ -218,3 +228,5 @@ const MILCODEC = {
         return bytes;
     }
 };
+
+globalThis.MILCODEC = MILCODEC;

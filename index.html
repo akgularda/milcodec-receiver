@@ -1,246 +1,109 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-    <link rel="icon" href="./docs/favicon.ico" sizes="any">
-    <link rel="apple-touch-icon" href="./docs/apple-touch-icon.png">
-    <link rel="manifest" href="./docs/site.webmanifest">
-    <meta property="og:image" content="./docs/og-image.png">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MILCODEC Receiver v4 (Robust)</title>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    >
+    <meta
+      name="description"
+      content="A browser-based technical demonstration of the MILCODEC ultrasonic packet receiver."
+    >
+    <title>MILCODEC Receiver — Monarch Castle Technologies</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Spectral:wght@500;600&display=swap"
+      rel="stylesheet"
+    >
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tweetnacl-util@0.15.1/nacl-util.min.js"></script>
-</head>
-
-<body>
-    <div class="receiver-container">
-        <div class="header">
-            <span class="title">⬡ MILCODEC RECEIVER</span>
-            <span class="version">v4.0 Robust</span>
+    <script defer src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/tweetnacl-util@0.15.1/nacl-util.min.js"></script>
+    <script defer src="decoder.js"></script>
+    <script defer src="crypto.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="brand-header">
+        <a class="brand-link" href="https://monarchcastle.tech/" aria-label="Monarch Castle Technologies home">
+          <img src="logo.png" alt="Monarch Castle Technologies" width="512" height="220">
+        </a>
+        <div class="brand-copy">
+          <p class="eyebrow">Part of Monarch Castle Technologies.</p>
+          <h1>MILCODEC Receiver</h1>
+          <p class="subtitle">Ultrasonic packet receiver demonstration</p>
         </div>
+      </header>
 
-        <div class="status-bar">
-            <span id="status-indicator" class="status-off">● OFFLINE</span>
-            <span id="signal-strength">Signal: --</span>
-        </div>
-
-        <div class="control-section">
-            <button id="start-btn" class="btn start-btn">🎤 START LISTENING</button>
-        </div>
-
-        <div class="visualizer-section">
-            <canvas id="spectrum" width="340" height="80"></canvas>
-        </div>
-
-        <div class="inbox-section">
-            <div class="section-header">INBOX</div>
-            <div id="inbox" class="inbox">
-                <div class="empty-state">Waiting for transmission...</div>
+      <main>
+        <section class="receiver-panel" aria-labelledby="receiver-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="section-kicker">Receiver control</p>
+              <h2 id="receiver-heading">Acoustic input</h2>
             </div>
-        </div>
-
-        <div class="reading-section">
-            <div class="section-header">DEBUG LOG</div>
-            <div id="debug-log"
-                style="font-family:monospace; font-size:10px; color:#666; padding:10px; height:100px; overflow-y:auto;">
+            <div class="status-line">
+              <span id="statusIndicator" class="status-indicator" aria-hidden="true"></span>
+              <span id="statusText" role="status" aria-live="polite">Receiver idle</span>
             </div>
+          </div>
+
+          <button id="startButton" type="button" class="primary-action">
+            Start microphone receiver
+          </button>
+
+          <div id="errorState" class="error-state" role="alert" hidden></div>
+
+          <figure class="spectrum-frame">
+            <canvas
+              id="spectrum"
+              width="900"
+              height="220"
+              role="img"
+              aria-label="Live microphone frequency spectrum from 12 to 20 kilohertz"
+            >
+              Live frequency spectrum visualization.
+            </canvas>
+            <figcaption>Detection band · 14–17 kHz · local processing only</figcaption>
+          </figure>
+        </section>
+
+        <div class="receiver-grid">
+          <section class="data-panel" aria-labelledby="inbox-heading">
+            <div class="panel-heading compact">
+              <div>
+                <p class="section-kicker">Decoded output</p>
+                <h2 id="inbox-heading">Message inbox</h2>
+              </div>
+              <span id="messageCount" class="count-badge" aria-label="0 messages">0</span>
+            </div>
+            <div id="inbox" class="inbox" aria-live="polite" aria-relevant="additions">
+              <p id="emptyInbox" class="empty-state">No packets decoded in this session.</p>
+            </div>
+          </section>
+
+          <section class="data-panel" aria-labelledby="diagnostics-heading">
+            <div class="panel-heading compact">
+              <div>
+                <p class="section-kicker">Local diagnostics</p>
+                <h2 id="diagnostics-heading">Receiver log</h2>
+              </div>
+            </div>
+            <div id="debugLog" class="debug-log" role="log" aria-live="polite" aria-relevant="additions">
+              <p>Receiver ready. Microphone access starts only on request.</p>
+            </div>
+          </section>
         </div>
+      </main>
+
+      <footer>
+        <p><strong>Technical demonstration utility. Not authenticated operational intelligence.</strong></p>
+        <p>Shared demo key verifies packet integrity only; it does not authenticate sender identity.</p>
+        <p>Audio is processed in this browser tab and is not uploaded by this application.</p>
+      </footer>
     </div>
-
-    <script src="decoder.js"></script>
-    <script src="crypto.js"></script>
-    <script>
-        class MilcodecReceiver {
-            constructor() {
-                this.isListening = false;
-                this.audioContext = null;
-                this.analyser = null;
-                this.audioBuffer = [];
-                this.messages = [];
-
-                this.startBtn = document.getElementById('start-btn');
-                this.statusIndicator = document.getElementById('status-indicator');
-                this.inbox = document.getElementById('inbox');
-                this.canvas = document.getElementById('spectrum');
-                this.ctx = this.canvas.getContext('2d');
-                this.debugLog = document.getElementById('debug-log');
-
-                this.startBtn.addEventListener('click', () => this.toggleListening());
-
-                // Override console.log
-                const originalLog = console.log;
-                console.log = (msg) => {
-                    this.log(msg);
-                    originalLog(msg);
-                };
-
-                this.startVisualization();
-            }
-
-            log(msg) {
-                const line = document.createElement('div');
-                line.textContent = `> ${msg}`;
-                this.debugLog.prepend(line);
-                if (this.debugLog.children.length > 20) this.debugLog.lastChild.remove();
-            }
-
-            async toggleListening() {
-                if (this.isListening) {
-                    this.stopListening();
-                } else {
-                    await this.startListening();
-                }
-            }
-
-            async startListening() {
-                try {
-                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                        sampleRate: 44100
-                    });
-
-                    // Resume context (mobile requirement)
-                    if (this.audioContext.state === 'suspended') {
-                        await this.audioContext.resume();
-                    }
-
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        audio: {
-                            sampleRate: 44100,
-                            channelCount: 1,
-                            echoCancellation: false,
-                            noiseSuppression: false,
-                            autoGainControl: false
-                        }
-                    });
-
-                    this.analyser = this.audioContext.createAnalyser();
-                    this.analyser.fftSize = 256;
-
-                    const microphone = this.audioContext.createMediaStreamSource(stream);
-                    microphone.connect(this.analyser);
-
-                    // 16384 buffer size = ~0.37s. Process chunks.
-                    const processor = this.audioContext.createScriptProcessor(16384, 1, 1);
-                    processor.onaudioprocess = (e) => {
-                        if (!this.isListening) return;
-                        const input = e.inputBuffer.getChannelData(0);
-                        this.audioBuffer.push(new Float32Array(input));
-
-                        // Process every ~3 seconds
-                        if (this.audioBuffer.length * 16384 >= 44100 * 3) {
-                            this.processAudio();
-                        }
-                    };
-
-                    microphone.connect(processor);
-                    processor.connect(this.audioContext.destination);
-
-                    this.isListening = true;
-                    this.startBtn.textContent = '⏹ STOP LISTENING';
-                    this.startBtn.classList.add('listening');
-                    this.statusIndicator.textContent = '● LISTENING (14.5kHz)';
-                    this.statusIndicator.className = 'status-on';
-
-                } catch (e) {
-                    alert('Mic Error: ' + e.message);
-                }
-            }
-
-            stopListening() {
-                this.isListening = false;
-                this.audioBuffer = [];
-                this.startBtn.textContent = '🎤 START LISTENING';
-                this.startBtn.classList.remove('listening');
-                this.statusIndicator.textContent = '● OFFLINE';
-                this.statusIndicator.className = 'status-off';
-                if (this.audioContext) this.audioContext.close();
-            }
-
-            processAudio() {
-                const totalLength = this.audioBuffer.reduce((sum, c) => sum + c.length, 0);
-                const combined = new Float32Array(totalLength);
-                let offset = 0;
-                for (const chunk of this.audioBuffer) {
-                    combined.set(chunk, offset);
-                    offset += chunk.length;
-                }
-                this.audioBuffer = [];
-
-                this.statusIndicator.textContent = '● DECODING...';
-
-                // Add tiny delay to let UI update
-                setTimeout(() => {
-                    const payload = MILCODEC.extractFromAudio(combined);
-
-                    if (payload) {
-                        const result = MilcodecCrypto.decrypt(payload);
-                        if (result.status === 'OK') {
-                            this.addMessage(result);
-                        } else {
-                            this.log(`Decrypt failed: ${result.content}`);
-                        }
-                    }
-                    this.statusIndicator.textContent = '● LISTENING (14.5kHz)';
-                }, 10);
-            }
-
-            addMessage(result) {
-                const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-                const emptyState = this.inbox.querySelector('.empty-state');
-                if (emptyState) emptyState.remove();
-
-                const item = document.createElement('div');
-                item.className = `message-item ${result.priority.toLowerCase()}`;
-
-                item.innerHTML = `
-                    <div style="font-weight:bold; color:#fff">${result.content}</div>
-                    <div style="font-size:0.8em; opacity:0.7">
-                        ${timestamp} • ${result.priority} • VALID
-                    </div>
-                `;
-
-                this.inbox.insertBefore(item, this.inbox.firstChild);
-
-                // Beep
-                const osc = this.audioContext.createOscillator();
-                const gain = this.audioContext.createGain();
-                osc.connect(gain);
-                gain.connect(this.audioContext.destination);
-                osc.frequency.value = 880;
-                gain.gain.value = 0.1;
-                osc.start();
-                setTimeout(() => osc.stop(), 200);
-            }
-
-            startVisualization() {
-                const draw = () => {
-                    requestAnimationFrame(draw);
-                    const w = this.canvas.width, h = this.canvas.height;
-                    this.ctx.fillStyle = '#0d0d14';
-                    this.ctx.fillRect(0, 0, w, h);
-
-                    if (this.analyser && this.isListening) {
-                        const data = new Uint8Array(this.analyser.frequencyBinCount);
-                        this.analyser.getByteFrequencyData(data);
-                        const barW = w / data.length * 2;
-                        let x = 0;
-                        for (let i = 0; i < data.length; i++) {
-                            const barH = (data[i] / 255) * h;
-                            this.ctx.fillStyle = `hsl(${120 - (data[i] / 255) * 120}, 80%, 50%)`;
-                            this.ctx.fillRect(x, h - barH, barW - 1, barH);
-                            x += barW;
-                        }
-                    }
-                };
-                draw();
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', () => new MilcodecReceiver());
-    </script>
-</body>
-
+  </body>
 </html>
