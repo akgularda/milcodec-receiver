@@ -95,3 +95,84 @@ python -m http.server 8080
 See `LICENSE`. © 2026 Monarch Castle Holdings · Ankara, Türkiye.
 
 <div align="center"><sub>🏰 Monarch Castle Holdings — turning open-source noise into lawful, verified, decision-grade intelligence.</sub></div>
+
+---
+
+<!-- repository-hygiene:start -->
+
+![Monarch Castle Technologies approved lockup](docs/brand/organization-lockup.png)
+
+Browser-based acoustic data link that demodulates and decrypts MILCODEC chirp-spread-spectrum signals over sound — a Monarch Castle Technologies / Defense Intelligence receiver.
+
+![Lifecycle: Active](docs/lifecycle-active.svg)
+
+## Repository status
+
+Lifecycle: **Active**. The badge and this statement describe maintenance status, not service availability.
+
+## Public access
+
+[Open the published project](https://monarchcastle.tech/milcodec-receiver/)
+
+## Screenshots
+
+![MILCODEC Receiver repository preview](docs/social-preview.png)
+
+The preview is maintained as a repository asset; the live interface or generated output remains authoritative.
+
+## Data and methodology
+
+- [decoder.js](decoder.js)
+- [crypto.js](crypto.js)
+
+These repository-specific sources define the methodology or provenance boundary. Source dates, transformation steps, and known gaps must travel with analytical outputs.
+
+## Update frequency
+
+Release-driven; the receiver has no background data feed.
+
+## Quick start
+
+```shell
+python -m http.server 8080
+```
+
+Run only in a trusted development environment and review repository-specific prerequisites before using networked or hardware features.
+
+## Architecture
+
+- `decoder.js` — repository-specific implementation, data, or configuration boundary.
+- `crypto.js` — repository-specific implementation, data, or configuration boundary.
+- `app.js` — repository-specific implementation, data, or configuration boundary.
+
+## Tests
+
+```shell
+node --test tests/repository-hygiene.test.mjs
+```
+
+## Provenance
+
+Original software history is maintained in Git. External datasets, reports, trademarks, screenshots, and assets are not relicensed by this repository; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before reuse.
+
+## Forecast limitations
+
+This repository does not publish a guaranteed forecast. Any scenarios, scores, or forward-looking language are analytical aids, not facts or advice; review source dates and methodology before use.
+
+## Security
+
+Do not publish vulnerabilities in an issue. Use GitHub's private vulnerability-reporting flow when available, or follow the [organization security policy](https://github.com/MonarchCastleTech/.github/security/policy).
+
+## License
+
+Original repository code and documentation are available under **MIT**; see [LICENSE](LICENSE). That license does not override third-party terms documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Citation
+
+Use the machine-readable [CITATION.cff](CITATION.cff). Cite the specific commit and, for analytical use, record the data or model snapshot date.
+
+## Masterbrand endorsement
+
+MILCODEC Receiver is a Monarch Castle Technologies project. **Part of Monarch Castle Technologies.**
+
+<!-- repository-hygiene:end -->
