@@ -11,24 +11,28 @@
   ![license](https://img.shields.io/badge/license-see%20LICENSE-lightgrey)
 </div>
 
-> **Executive summary** — Milcodec Receiver is a zero-install, browser-native receiver that demodulates and decrypts MILCODEC messages carried over sound. It turns any phone or laptop into an acoustic intercept terminal: a near-ultrasonic chirp-spread-spectrum signal arriving at the device microphone is matched-filtered, error-corrected, authenticated, and surfaced as a prioritized message inbox — all client-side, behind a covert FM-radio interface. Built by the Defense Intelligence division of Monarch Castle Technologies for short-range, infrastructure-independent communications where RF is unavailable, monitored, or undesirable.
+> **Executive summary** — MILCODEC Receiver is a zero-install browser demonstration that detects the repository's chirp-spread-spectrum packet format, checks a shared-key packet envelope, and displays decoded text locally. It is intended for codec development, interoperability experiments, and browser audio testing.
+
+> **Technical demonstration utility. Not authenticated operational intelligence.**
+>
+> Shared demo key verifies packet integrity only; it does not authenticate sender identity.
 
 ## ✨ Highlights
 - **Data-over-sound** reception in the **14–17 kHz** near-ultrasonic band — no radios, no pairing, no network. The air gap *is* the channel.
 - **Chirp Spread Spectrum ("The Dolphin") modulation** — binary chirp keying (up-chirp = 1, down-chirp = 0) at 20 baud, decoded with a matched-filter correlation receiver for robustness against ambient noise.
-- **Authenticated encryption** via TweetNaCl `secretbox` (XSalsa20-Poly1305): every payload is decrypted and integrity-checked before it ever reaches the operator's inbox.
+- **Shared-key packet integrity** via TweetNaCl `secretbox` (XSalsa20-Poly1305), with no claim of sender identity.
 - **Forward error correction** — 3× repetition coding with majority-vote bit recovery, plus a preamble + 16-bit sync word + length-prefixed framing protocol for reliable packet recovery.
 - **Military message precedence** — decoded traffic is tagged `FLASH` / `IMMEDIATE` / `ROUTINE`, with audible alerting on high-priority receipt.
-- **Covert operating mode** — the live UI presents as an ordinary FM tuner; the receiver console unlocks only on a secret gesture and passcode.
+- **Direct, accessible receiver UI** with keyboard-operable controls, inline permission errors, a live spectrum, and a decoded-message inbox.
 - **Real-time spectral visualizer** — Web Audio FFT spectrum and signal-strength indicator for live link assessment.
 
 ## 🖼️ Preview
 <!-- CODEX: capture real screenshots from the live build at https://monarchcastletech.github.io/milcodec-receiver/ and drop them into docs/ -->
-<!-- ![Milcodec Receiver — covert FM-tuner cover interface](docs/screenshot-1.png) (screenshot pending) -->
-<!-- ![Milcodec Receiver — unlocked receiver console with spectrum visualizer and decoded inbox](docs/screenshot-2.png) (screenshot pending) -->
+<!-- ![MILCODEC Receiver control and spectrum](docs/screenshot-1.png) (screenshot pending) -->
+<!-- ![MILCODEC decoded inbox and diagnostics](docs/screenshot-2.png) (screenshot pending) -->
 
 ## 🧭 What it does
-Milcodec Receiver is the receive half of an acoustic covert channel. A companion sender plays an encoded waveform through a speaker; this application listens through the microphone, recovers the bitstream, decrypts it, and displays the message.
+MILCODEC Receiver is the receive-side demonstration for this repository's acoustic packet format. A compatible test sender can play an encoded waveform through a speaker; this page listens through the microphone, recovers a candidate bitstream, opens its shared-key envelope, and displays valid text.
 
 **End-to-end signal flow:**
 ```
@@ -42,7 +46,7 @@ The decoder generates linear up- and down-chirp templates (14 kHz ⇄ 17 kHz ove
 Recovered payloads are NaCl `secretbox` frames (24-byte nonce + ciphertext). On successful open, the inner packet is parsed as `1-byte type + 64-byte signature field + JSON body`, yielding the message text and its precedence. Failed opens are rejected and never displayed.
 
 ### Operator console (`index.html`, `app.js`, `style.css`)
-The console runs entirely on the Web Audio API — `getUserMedia` capture, an `AnalyserNode` spectrum, and a `ScriptProcessor` that batches ~2–3 seconds of audio per decode pass. In covert mode the interface mimics an FM radio (tuner dial, scan, power, stereo indicator); triple-clicking the stereo indicator opens a passcode gate that reveals the receiver, its inbox, and the live decode log.
+The console runs entirely on the Web Audio API — `getUserMedia` capture, an `AnalyserNode` spectrum, and a bounded local buffer passed to the decoder. The page requests microphone access only when the start button is activated. It exposes receiver status, decoded messages, and a local diagnostic log without a hidden passcode flow.
 
 ## 🗂️ Inputs, outputs & provenance
 This is an analytical **tool**, not a data feed — but Monarch Castle doctrine still governs every message it surfaces: *evidence before assertion.*
@@ -70,8 +74,8 @@ This is an analytical **tool**, not a data feed — but Monarch Castle doctrine 
 
 **Operate the receiver:**
 1. The interface opens as an FM radio tuner (cover mode).
-2. **Triple-click the `STEREO` indicator** to reveal the passcode gate.
-3. Enter the demo passcode `DELTA` to unlock the receiver console.
+2. Activate **Start microphone receiver** and grant microphone permission.
+3. Play a compatible MILCODEC test waveform near the device microphone.
 4. Press **POWER**, then grant microphone permission when prompted.
 5. Decoded transmissions appear in the **INBOX**, tagged by precedence; high-priority traffic triggers an audible alert.
 
@@ -83,9 +87,9 @@ python -m http.server 8080
 # open http://localhost:8080
 ```
 
-**Deploy your own:** push the repository contents to a GitHub repo, enable **Settings → Pages → Deploy from branch (`main`)**, and the receiver is served over HTTPS in about a minute.
+**Deployment:** Legacy GitHub Pages is deliberately preserved from `main` at the repository root. No Actions workflow has replaced it because an identical-artifact migration has not been proven.
 
-> **Operational note.** This build ships with a **hardcoded demo key and passcode** for evaluation only. For any operational use, replace the symmetric key with a proper key-exchange / key-management scheme and remove the static passcode. The cover interface and default credentials are demonstration defaults, not a security control.
+> **Security boundary.** This build ships with a hardcoded shared demo key. It does not provide key exchange, participant identity, replay prevention, traffic analysis resistance, or a trusted operational workflow. Audio buffers are capped at 30 seconds and decoded packets at 1,024 bytes; message text is inserted through `textContent`.
 
 ## 🧱 Part of Monarch Castle
 > A product of **Defense Intelligence** · **Monarch Castle Technologies** — an operating company of **[Monarch Castle Holdings](https://github.com/MonarchCastleHoldings)**.
@@ -94,7 +98,7 @@ python -m http.server 8080
 ## 📜 License
 See `LICENSE`. © 2026 Monarch Castle Holdings · Ankara, Türkiye.
 
-<div align="center"><sub>🏰 Monarch Castle Holdings — turning open-source noise into lawful, verified, decision-grade intelligence.</sub></div>
+<div align="center"><sub>Part of Monarch Castle Technologies.</sub></div>
 
 ---
 

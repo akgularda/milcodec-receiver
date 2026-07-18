@@ -1,74 +1,96 @@
 /**
- * MILCODEC Crypto Module - NaCl Compatible
- * Uses TweetNaCl secretbox (XSalsa20-Poly1305)
+ * MILCODEC packet envelope decoder.
+ *
+ * The bundled key is intentionally a shared demonstration key. NaCl secretbox
+ * authenticates packet integrity under that key; it does not establish sender
+ * identity.
  */
-
 const MilcodecCrypto = {
-    // Must match Python DEFAULT_KEY
     DEFAULT_KEY: new Uint8Array([
-        48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49, 50, 51, 52, 53,
-        54, 55, 56, 57, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 49
-    ]), // "01234567890123456789012345678901"
-
+        0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
+        0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c,
+        0x76, 0x2e, 0x71, 0x60, 0xf3, 0x8b, 0x4d, 0xa5,
+        0x6a, 0x78, 0x4d, 0x90, 0x45, 0x19, 0x0c, 0xfe,
+    ]),
+    MAX_ENCRYPTED_BYTES: 1024,
+    MAX_MESSAGE_CHARS: 2048,
+    ALLOWED_PRIORITIES: new Set(['ROUTINE', 'PRIORITY', 'IMMEDIATE', 'FLASH']),
     key: null,
 
     init(keyHex = null) {
-        if (keyHex) {
-            this.key = this.hexToBytes(keyHex);
-        } else {
-            this.key = this.DEFAULT_KEY;
-        }
-        console.log('[CRYPTO] Initialized with key');
+        this.key = keyHex === null ? new Uint8Array(this.DEFAULT_KEY) : this.hexToBytes(keyHex);
+        if (this.key.length !== 32) throw new Error('MILCODEC key must contain exactly 32 bytes.');
     },
 
-    hexToBytes(hex) {
-        const bytes = new Uint8Array(hex.length / 2);
-        for (let i = 0; i < hex.length; i += 2) {
-            bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+    hexToBytes(value) {
+        if (typeof value !== 'string' || !/^[0-9a-f]+$/i.test(value) || value.length % 2 !== 0) {
+            throw new Error('Key must be an even-length hexadecimal string.');
+        }
+
+        const bytes = new Uint8Array(value.length / 2);
+        for (let index = 0; index < value.length; index += 2) {
+            bytes[index / 2] = Number.parseInt(value.slice(index, index + 2), 16);
         }
         return bytes;
     },
 
     decrypt(encryptedBytes) {
-        if (!this.key) this.init();
-
         try {
-            // NaCl secretbox format: 24-byte nonce + ciphertext
-            if (encryptedBytes.length < 24 + 16) {
-                return { content: 'Too short', status: 'ERROR', priority: 'ROUTINE' };
+            if (!(encryptedBytes instanceof Uint8Array)) {
+                throw new Error('Encrypted packet must be a byte array.');
+            }
+            if (encryptedBytes.length < 40) {
+                throw new Error('Encrypted packet is too short.');
+            }
+            if (encryptedBytes.length > this.MAX_ENCRYPTED_BYTES) {
+                throw new Error('Encrypted packet is too large.');
+            }
+            if (!this.key) this.init();
+            if (
+                typeof nacl === 'undefined'
+                || !nacl.secretbox
+                || typeof nacl.secretbox.open !== 'function'
+            ) {
+                throw new Error('NaCl packet decoder is unavailable.');
             }
 
-            const nonce = encryptedBytes.slice(0, 24);
-            const ciphertext = encryptedBytes.slice(24);
-
-            // Decrypt using TweetNaCl
+            const nonce = encryptedBytes.subarray(0, 24);
+            const ciphertext = encryptedBytes.subarray(24);
             const plaintext = nacl.secretbox.open(ciphertext, nonce, this.key);
-
-            if (!plaintext) {
-                return { content: 'Decryption failed', status: 'ERROR', priority: 'ROUTINE' };
+            if (!plaintext) throw new Error('Packet integrity check failed.');
+            if (!(plaintext instanceof Uint8Array) || plaintext.length < 65) {
+                throw new Error('Decoded packet envelope is invalid.');
             }
 
-            // Parse packet: 1 byte type + 64 bytes signature + JSON
-            const msgType = plaintext[0];
-            const jsonBytes = plaintext.slice(65);
+            const messageType = plaintext[0];
+            const jsonBytes = plaintext.subarray(65);
+            const data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(jsonBytes));
+            if (!data || typeof data !== 'object' || Array.isArray(data)) {
+                throw new Error('Decoded packet payload must be an object.');
+            }
+            if (typeof data.m !== 'string') {
+                throw new Error('Decoded packet message must be text.');
+            }
+            if (data.m.length > this.MAX_MESSAGE_CHARS) {
+                throw new Error('Decoded message too large.');
+            }
 
-            const jsonStr = new TextDecoder().decode(jsonBytes);
-            const data = JSON.parse(jsonStr);
-
+            const priority = this.ALLOWED_PRIORITIES.has(data.p) ? data.p : 'ROUTINE';
             return {
-                content: data.m || '',
-                priority: data.p || 'ROUTINE',
-                msgType: msgType === 1 ? 'TEXT' : 'OTHER',
+                content: data.m,
+                priority,
+                msgType: messageType === 1 ? 'TEXT' : 'OTHER',
                 status: 'OK',
-                verified: false
+                verified: false,
             };
-
-        } catch (e) {
-            console.error('[CRYPTO] Decrypt error:', e);
-            return { content: 'Error: ' + e.message, status: 'ERROR', priority: 'ROUTINE' };
+        } catch (error) {
+            return {
+                status: 'ERROR',
+                error: error instanceof Error ? error.message : 'Packet decoding failed.',
+            };
         }
-    }
+    },
 };
 
-// Auto-init
 MilcodecCrypto.init();
+globalThis.MilcodecCrypto = MilcodecCrypto;
