@@ -10,14 +10,17 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 const hash = (relativePath) =>
   crypto.createHash('sha256').update(fs.readFileSync(path.join(root, relativePath))).digest('hex');
 
-test('runtime uses the approved organization lockup without modification', () => {
+test('brand header uses the official dark MILCODEC lockup', () => {
   assert.ok(fs.existsSync(path.join(root, 'logo.png')), 'runtime logo must exist');
-  assert.equal(hash('logo.png'), hash('docs/brand/organization-lockup.png'));
+  assert.equal(
+    hash('logo.png'),
+    '9dfeaad8d391b9d0dc6a2d76e049d47e578f17000b7469575a8e5cb7ba7a54f5',
+  );
 
   const html = read('index.html');
   assert.match(
     html,
-    /<img[^>]+src=["']logo\.png["'][^>]+alt=["']Monarch Castle Technologies["']/i,
+    /<img[^>]+src=["']logo\.png["'][^>]+alt=["']MILCODEC Receiver["']/i,
   );
   assert.match(html, /Part of Monarch Castle Technologies\./);
 });
