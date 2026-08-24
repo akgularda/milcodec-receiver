@@ -19,7 +19,7 @@ test("MonarchCastleTech/milcodec-receiver exposes the complete repository docume
   assert.ok(match, "README must include the managed repository-hygiene block");
   assert.ok(contract.includes("Browser-based acoustic data link that demodulates and decrypts MILCODEC chirp-spread-spectrum signals over sound — a Monarch Castle Technologies / Defense Intelligence receiver."), "README purpose must match the canonical registry");
   assert.match(contract, /lifecycle-active/);
-  assert.ok(contract.includes("https://monarchcastle.tech/milcodec-receiver/"));
+  assert.ok(contract.includes("https://monarchcastletech.github.io/milcodec-receiver/"));
   for (const heading of expectedHeadings) assert.ok(contract.includes(`## ${heading}`), `missing heading: ${heading}`);
   for (const evidence of methodologyEvidence) {
     assert.ok(existsSync(resolve(root, evidence)), `missing methodology evidence: ${evidence}`);
