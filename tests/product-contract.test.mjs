@@ -47,10 +47,21 @@ test('runtime is semantic, keyboard-operable, and exposes accessible status', ()
   assert.match(html, /<main\b/i);
   assert.match(html, /<section[^>]+aria-labelledby=/i);
   assert.match(html, /<button[^>]+id=["']startButton["'][^>]+type=["']button["']/i);
+  assert.match(html, /<button[^>]+id=["']demoButton["'][^>]+type=["']button["']/i);
   assert.match(html, /id=["']statusText["'][^>]+role=["']status["'][^>]+aria-live=["']polite["']/i);
   assert.match(html, /id=["']debugLog["'][^>]+role=["']log["'][^>]+aria-live=["']polite["']/i);
   assert.match(html, /<canvas[^>]+aria-label=/i);
   assert.doesNotMatch(html, /user-scalable\s*=\s*no|maximum-scale\s*=\s*1/i);
+});
+
+test('end users can verify the local packet path without a transmitter or microphone', () => {
+  const html = read('index.html');
+  const app = read('app.js');
+  assert.match(html, /Run local packet demo/i);
+  assert.match(html, /without microphone access/i);
+  assert.match(app, /nacl\.secretbox\(plaintext, nonce, MilcodecCrypto\.key\)/);
+  assert.match(app, /MilcodecCrypto\.decrypt\(packet\)/);
+  assert.match(app, /this\.addMessage\(result\)/);
 });
 
 test('responsive layout and visible keyboard focus are contractual', () => {

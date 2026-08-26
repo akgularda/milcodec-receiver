@@ -189,6 +189,35 @@ main {
     letter-spacing: 0.03em;
 }
 
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.secondary-action {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  padding: 0.8rem 1rem;
+  font: 600 0.78rem/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.secondary-action:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.action-help {
+  max-width: 72ch;
+  margin: 0.75rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
 .primary-action:hover:not(:disabled) {
     background: #dbb65e;
 }

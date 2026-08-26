@@ -51,9 +51,17 @@
             </div>
           </div>
 
-          <button id="startButton" type="button" class="primary-action">
-            Start microphone receiver
-          </button>
+          <div class="action-row">
+            <button id="startButton" type="button" class="primary-action">
+              Start microphone receiver
+            </button>
+            <button id="demoButton" type="button" class="secondary-action">
+              Run local packet demo
+            </button>
+          </div>
+          <p class="action-help">
+            No transmitter yet? Run the local demo to verify packet integrity, decoding, and inbox delivery without microphone access.
+          </p>
 
           <div id="errorState" class="error-state" role="alert" hidden></div>
 

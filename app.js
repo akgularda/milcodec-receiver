@@ -28,6 +28,7 @@
         constructor(documentRef) {
             this.document = documentRef;
             this.startButton = documentRef.getElementById('startButton');
+            this.demoButton = documentRef.getElementById('demoButton');
             this.statusIndicator = documentRef.getElementById('statusIndicator');
             this.statusText = documentRef.getElementById('statusText');
             this.errorState = documentRef.getElementById('errorState');
@@ -50,6 +51,40 @@
             this.isListening = false;
 
             this.startButton.addEventListener('click', () => this.toggleListening());
+            this.demoButton.addEventListener('click', () => this.runLocalDemo());
+        }
+
+        runLocalDemo() {
+            this.clearError();
+            this.demoButton.disabled = true;
+            try {
+                if (typeof nacl === 'undefined' || typeof nacl.secretbox !== 'function') {
+                    throw new Error('The local packet decoder is still loading. Try again in a moment.');
+                }
+                const payload = new TextEncoder().encode(JSON.stringify({
+                    p: 'ROUTINE',
+                    m: 'Local MILCODEC packet path verified. Receiver is ready for an acoustic transmission.',
+                }));
+                const plaintext = new Uint8Array(65 + payload.length);
+                plaintext[0] = 1;
+                plaintext.set(payload, 65);
+                const nonce = globalThis.crypto.getRandomValues(new Uint8Array(24));
+                const ciphertext = nacl.secretbox(plaintext, nonce, MilcodecCrypto.key);
+                const packet = new Uint8Array(nonce.length + ciphertext.length);
+                packet.set(nonce);
+                packet.set(ciphertext, nonce.length);
+                const result = MilcodecCrypto.decrypt(packet);
+                if (result.status !== 'OK') throw new Error(result.error);
+                this.addMessage(result);
+                this.setStatus('Local packet demo passed', 'active');
+                this.log('Local encrypted packet created, authenticated, and decoded.');
+            } catch (error) {
+                this.showError(error instanceof Error ? error.message : 'Local packet demo failed.');
+                this.setStatus('Local packet demo failed', 'error');
+                this.log('Local packet demo failed safely.');
+            } finally {
+                this.demoButton.disabled = false;
+            }
         }
 
         async toggleListening() {

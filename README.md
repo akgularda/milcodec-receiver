@@ -74,10 +74,10 @@ This is an analytical **tool**, not a data feed — but Monarch Castle doctrine 
 
 **Operate the receiver:**
 1. The interface opens as an FM radio tuner (cover mode).
-2. Activate **Start microphone receiver** and grant microphone permission.
-3. Play a compatible MILCODEC test waveform near the device microphone.
-4. Press **POWER**, then grant microphone permission when prompted.
-5. Decoded transmissions appear in the **INBOX**, tagged by precedence; high-priority traffic triggers an audible alert.
+2. Select **Run local packet demo** to verify encryption, integrity checking, parsing, and inbox delivery without microphone permission.
+3. For acoustic reception, activate **Start microphone receiver** and grant microphone permission.
+4. Play a compatible MILCODEC test waveform near the device microphone.
+5. Decoded transmissions appear in the **Message inbox**, tagged by precedence.
 
 **Run locally:**
 ```bash
