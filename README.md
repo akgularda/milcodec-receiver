@@ -87,7 +87,7 @@ python -m http.server 8080
 # open http://localhost:8080
 ```
 
-**Deployment:** Legacy GitHub Pages is deliberately preserved from `main` at the repository root. No Actions workflow has replaced it because an identical-artifact migration has not been proven.
+**Deployment:** GitHub Actions verifies the contract tests and publishes the identical repository-root artifact to GitHub Pages. No build step rewrites runtime files.
 
 > **Security boundary.** This build ships with a hardcoded shared demo key. It does not provide key exchange, participant identity, replay prevention, traffic analysis resistance, or a trusted operational workflow. Audio buffers are capped at 30 seconds and decoded packets at 1,024 bytes; message text is inserted through `textContent`.
 

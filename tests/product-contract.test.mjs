@@ -80,13 +80,12 @@ test('message rendering does not use HTML injection sinks', () => {
   assert.match(app, /\.textContent\s*=/);
 });
 
-test('legacy Pages deployment is deliberately preserved', () => {
-  assert.equal(
-    fs.existsSync(path.join(root, '.github', 'workflows', 'pages.yml')),
-    false,
-    'do not replace legacy Pages without an identical-artifact migration',
-  );
-  assert.match(read('README.md'), /Legacy GitHub Pages.*main.*repository root/is);
+test('Pages deployment publishes the identical repository-root artifact', () => {
+  const workflow = read('.github/workflows/pages.yml');
+  assert.match(workflow, /node --test tests\/\*\.test\.mjs/);
+  assert.match(workflow, /actions\/upload-pages-artifact@v3[\s\S]*path:\s*\./);
+  assert.match(workflow, /actions\/deploy-pages@v4/);
+  assert.match(read('README.md'), /identical repository-root artifact/is);
 });
 
 test('repository retains an MIT license and rights notice', () => {
